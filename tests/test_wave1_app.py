@@ -4,7 +4,7 @@ from osint_workbench.app import create_app
 
 def test_app_exposes_existing_routes():
     app = create_app()
-    paths = {route.path for route in app.routes}
+    paths = set(app.openapi()["paths"])
     assert "/health" in paths
     assert "/ui" in paths
     assert "/api/cases" in paths
