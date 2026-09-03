@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+
+if [[ "${1:-}" == "graph" ]]; then
+  shift
+  exec "$ROOT/scripts/graph.sh" "$@"
+fi
+
+
+if [[ "${1:-}" == "email" ]]; then
+  shift
+  exec "$ROOT/scripts/email.sh" "$@"
+fi
+
+
+if [[ "${1:-}" == "person" ]]; then
+  shift
+  exec "$ROOT/scripts/person.sh" "$@"
+fi
+
+COMPOSE=(-f "$ROOT/compose.yaml" -f "$ROOT/compose.osint.yaml")
+
+usage() {
+  echo "Użycie:"
+  echo "  ./osint domain domena.pl"
+  echo "  ./osint domain domena.pl --active --authorized"
+  exit 1
+}
+
+[[ $# -ge 2 ]] || usage
+[[ "$1" == "domain" ]] || usage
+
+DOMAIN="$2"
+shift 2
+
+ACTIVE=0
+AUTHORIZED=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --active) ACTIVE=1 ;;
+    --authorized) AUTHORIZED=1 ;;
+    *) echo "Nieznana opcja: $1"; exit 1 ;;
+  esac
+  shift
+done
+
+DOMAIN="$(echo "$DOMAIN" \
+  | sed -E 's#^https?://##; s#/.*$##; s/:.*$//' \
+  | tr '[:upper:]' '[:lower:]')"
+
+if [[ "$ACTIVE" -eq 1 && "$AUTHORIZED" -ne 1 ]]; then
+  echo "BLOKADA: tryb ACTIVE wymaga równocześnie --authorized"
+  exit 2
+fi
+
+STAMP="$(date +%Y%m%d-%H%M%S)"
+SAFE="$(echo "$DOMAIN" | tr '.:' '__')"
+CASE="$ROOT/data/cases/${SAFE}-${STAMP}"
+BBOT_NAME="${SAFE}-${STAMP}"
+
+mkdir -p "$CASE"
+
+echo
+echo "======================================"
+echo " OSINT DOMAIN"
+echo " Target: $DOMAIN"
+echo " Case:   $CASE"
+echo " Mode:   $([[ $ACTIVE -eq 1 ]] && echo ACTIVE || echo PASSIVE)"
+echo "======================================"
+echo
+
+echo "[1/3] Subfinder..."
+docker compose "${COMPOSE[@]}" run --rm subfinder \
+  -d "$DOMAIN" -silent \
+  > "$CASE/subfinder.txt" || true
+
+echo "[2/3] theHarvester..."
+docker compose "${COMPOSE[@]}" run --rm theharvester \
+  -d "$DOMAIN" \
+  -b crtsh,certspotter \
+  -l 200 \
+  > "$CASE/theharvester.txt" 2>&1 || true
+
+echo "[3/3] BBOT PASSIVE-LIGHT..."
+docker compose "${COMPOSE[@]}" run --rm bbot \
+  -t "$DOMAIN" \
+  -m certspotter crt_db hackertarget rapiddns urlscan wayback \
+  -em speculate \
+  -c dns.minimal=true \
+  -n "$BBOT_NAME" \
+  -o /root/.bbot/scans \
+  > "$CASE/bbot.log" 2>&1 || true
+
+BBOT_JSON="$ROOT/data/bbot/scans/$BBOT_NAME/output.json"
+
+if [[ -f "$BBOT_JSON" ]]; then
+  cp "$BBOT_JSON" "$CASE/bbot.json"
+fi
+
+DOMAIN="$DOMAIN" CASE="$CASE" python3 <<'PY'
+import json
+import os
+import re
+from pathlib import Path
+from collections import defaultdict
+
+domain = os.environ["DOMAIN"].strip(".").lower()
+case = Path(os.environ["CASE"])
+
+found = defaultdict(set)
+ips = defaultdict(set)
+
+def valid(host):
+    host = host.strip(".").lower()
+    return host == domain or host.endswith("." + domain)
+
+# Subfinder
+p = case / "subfinder.txt"
+if p.exists():
+    for line in p.read_text(errors="ignore").splitlines():
+        host = line.strip().lower()
+        if valid(host):
+            found[host].add("subfinder")
+
+# theHarvester
+p = case / "theharvester.txt"
+if p.exists():
+    text = p.read_text(errors="ignore")
+    pattern = re.compile(
+        r'(?<![A-Za-z0-9.-])(?:[A-Za-z0-9_-]+\.)+' +
+        re.escape(domain) +
+        r'(?![A-Za-z0-9.-])',
+        re.I
+    )
+    for host in pattern.findall(text):
+        host = host.lower().strip(".")
+        if valid(host):
+            found[host].add("theharvester")
+
+# BBOT JSONL
+p = case / "bbot.json"
+if p.exists():
+    for line in p.read_text(errors="ignore").splitlines():
+        try:
+            obj = json.loads(line)
+        except Exception:
+            continue
+
+        if obj.get("type") != "DNS_NAME":
+            continue
+
+        host = obj.get("data")
+        if not isinstance(host, str) or not valid(host):
+            continue
+
+        module = obj.get("module", "bbot")
+        if module == "SEED":
+            found[host].add("seed")
+        else:
+            found[host].add("bbot:" + module)
+
+        for ip in obj.get("resolved_hosts", []):
+            ips[host].add(str(ip))
+
+# Root target always exists as seed, but this is not evidence from an external source.
+found[domain].add("target")
+
+results = []
+
+for host in sorted(found):
+    sources = sorted(found[host])
+
+    independent = set()
+    for src in sources:
+        if src.startswith("bbot:"):
+            independent.add("bbot")
+        elif src not in {"seed", "target"}:
+            independent.add(src)
+
+    count = len(independent)
+
+    if count >= 3:
+        confidence = "HIGH"
+    elif count == 2:
+        confidence = "MEDIUM"
+    elif count == 1:
+        confidence = "LOW"
+    else:
+        confidence = "SEED"
+
+    results.append({
+        "host": host,
+        "sources": sources,
+        "independent_sources": sorted(independent),
+        "confidence": confidence,
+        "resolved_ips": sorted(ips[host]),
+    })
+
+(case / "hosts.json").write_text(
+    json.dumps(results, indent=2, ensure_ascii=False)
+)
+
+(case / "hosts.txt").write_text(
+    "\n".join(x["host"] for x in results) + "\n"
+)
+
+print()
+print("=== WYNIK PASYWNY ===")
+for x in results:
+    print(
+        f'{x["confidence"]:6} '
+        f'{x["host"]:45} '
+        f'[{", ".join(x["sources"])}]'
+    )
+
+print()
+print(f"Hostów po deduplikacji: {len(results)}")
+PY
+
+if [[ "$ACTIVE" -eq 1 ]]; then
+  echo
+  echo "[ACTIVE] httpx..."
+
+  cat "$CASE/hosts.txt" \
+    | docker compose "${COMPOSE[@]}" run --rm -T httpx \
+        -silent -json \
+    > "$CASE/httpx.jsonl" || true
+
+  echo "Wyniki ACTIVE: $CASE/httpx.jsonl"
+fi
+
+echo
+echo "======================================"
+echo " GOTOWE"
+echo "======================================"
+echo "TXT:  $CASE/hosts.txt"
+echo "JSON: $CASE/hosts.json"
+echo "CASE: $CASE"
+
+echo
+echo "[AUTO-IMPORT] Neo4j..."
+"$ROOT/scripts/graph.sh" "$CASE"

@@ -1,0 +1,48 @@
+services:
+
+  bbot:
+    image: osint-bbot:arm64
+    platform: linux/arm64/v8
+    profiles: ["tools"]
+    volumes:
+      - ./data/bbot:/root/.bbot
+    network_mode: bridge
+
+  httpx:
+    image: projectdiscovery/httpx:latest
+    platform: linux/arm64/v8
+    profiles: ["tools"]
+    volumes:
+      - ./data/httpx:/data
+
+  subfinder:
+    image: projectdiscovery/subfinder:latest
+    platform: linux/arm64/v8
+    profiles: ["tools"]
+    volumes:
+      - ./data/subfinder:/root/.config/subfinder
+
+  maigret:
+    image: soxoj/maigret:latest
+    platform: linux/arm64/v8
+    profiles: ["tools"]
+    volumes:
+      - ./data/maigret:/app/reports
+
+  theharvester:
+    image: ghcr.io/laramies/theharvester:latest
+    platform: linux/arm64/v8
+    profiles: ["tools"]
+    entrypoint: ["theHarvester"]
+    volumes:
+      - ./data/theharvester:/root/.theHarvester
+
+  sherlock:
+    image: sherlock/sherlock:latest
+    platform: linux/arm64/v8
+    profiles: ["tools"]
+
+  holehe:
+    image: osint-holehe:arm64
+    platform: linux/arm64/v8
+    profiles: ["tools"]
