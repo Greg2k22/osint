@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OSINT Workbench v2</title>
+  <link rel="stylesheet" href="/ui/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">LOCAL ANALYTICAL WORKBENCH</div>
+      <h1>OSINT Workbench <span class="version">v2</span></h1>
+      <p>Dowód → korelacja → confidence → graf → analiza</p>
+    </div>
+    <div class="topbar-actions">
+      <span id="api-status" class="status-pill pending">API…</span>
+      <button class="secondary" type="button" onclick="refreshAll()">Odśwież</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="stats-grid" aria-label="Podsumowanie">
+      <article class="stat-card"><span>Sprawy</span><strong id="stat-cases">–</strong></article>
+      <article class="stat-card"><span>Zadania</span><strong id="stat-jobs">–</strong></article>
+      <article class="stat-card"><span>W kolejce</span><strong id="stat-pending">–</strong></article>
+      <article class="stat-card"><span>Błędy</span><strong id="stat-failed">–</strong></article>
+    </section>
+
+    <section class="panel system-panel">
+      <div class="section-head">
+        <div><div class="eyebrow">SYSTEM</div><h2>Stan środowiska</h2></div>
+        <span class="hint">bez ujawniania sekretów</span>
+      </div>
+      <div id="system-status-grid" class="system-status-grid"><span class="muted">Ładowanie…</span></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">COLLECT</div>
+          <h2>Nowa analiza</h2>
+        </div>
+        <span class="hint">PASSIVE domyślnie · ACTIVE tylko DOMAIN</span>
+      </div>
+
+      <form id="scan-form" class="scan-form">
+        <label>Typ
+          <select id="scan-type">
+            <option value="DOMAIN">DOMAIN</option>
+            <option value="PERSON">PERSON</option>
+            <option value="EMAIL">EMAIL</option>
+          </select>
+        </label>
+        <label class="grow">Cel
+          <input id="scan-target" type="text" autocomplete="off" placeholder="example.org" required>
+        </label>
+        <label>Tryb
+          <select id="scan-mode">
+            <option value="PASSIVE">PASSIVE</option>
+            <option value="ACTIVE">ACTIVE</option>
+          </select>
+        </label>
+        <label class="authorization">
+          <input id="scan-authorized" type="checkbox" disabled>
+          Mam autoryzację
+        </label>
+        <button id="scan-submit" type="submit">Uruchom analizę</button>
+      </form>
+      <div id="scan-result" class="inline-message"></div>
+    </section>
+
+    <div class="workspace-grid">
+      <section class="panel cases-panel">
+        <div class="section-head">
+          <div><div class="eyebrow">CASES</div><h2>Sprawy</h2></div>
+          <span id="case-summary" class="hint">Ładowanie…</span>
+        </div>
+        <div class="table-wrap">
+          <table id="case-table">
+            <thead><tr><th>Typ</th><th>Cel / Case ID</th><th>Obiekty</th></tr></thead>
+            <tbody id="case-body"><tr><td colspan="3" class="muted">Ładowanie…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel jobs-panel">
+        <div class="section-head">
+          <div><div class="eyebrow">QUEUE</div><h2>Zadania</h2></div>
+          <span id="job-summary" class="hint">Ładowanie…</span>
+        </div>
+        <div class="table-wrap compact-table">
+          <table id="job-table">
+            <thead><tr><th>Status</th><th>Typ</th><th>Cel</th><th>Tryb</th></tr></thead>
+            <tbody id="job-body"><tr><td colspan="4" class="muted">Ładowanie…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <section id="case-detail" class="case-detail hidden">
+      <div class="case-titlebar">
+        <div>
+          <div class="eyebrow">ANALYZE</div>
+          <h2 id="case-detail-title">Szczegóły sprawy</h2>
+          <div id="case-detail-meta" class="meta-line"></div>
+        </div>
+        <div class="export-actions">
+          <a id="export-md" class="button-link secondary" href="#" target="_blank">Markdown</a>
+          <a id="export-json" class="button-link secondary" href="#" target="_blank">JSON</a>
+          <a id="export-csv" class="button-link secondary" href="#" target="_blank">CSV</a>
+          <button class="secondary" type="button" onclick="closeCase()">Zamknij</button>
+        </div>
+      </div>
+
+      <section id="case-summary-cards" class="stats-grid case-stats"></section>
+
+      <div class="analysis-grid">
+        <section class="panel graph-panel">
+          <div class="section-head graph-head">
+            <div><div class="eyebrow">GRAPH</div><h3>Powiązania</h3></div>
+            <div class="graph-actions">
+              <button class="secondary small" type="button" onclick="fitGraph()">Dopasuj</button>
+              <button class="secondary small" type="button" onclick="resetGraphLayout()">Układ</button>
+            </div>
+          </div>
+
+          <div class="filter-row confidence-filter" aria-label="Filtr confidence">
+            <label><input id="confidence-high" type="checkbox" checked> HIGH</label>
+            <label><input id="confidence-medium" type="checkbox" checked> MEDIUM</label>
+            <label><input id="confidence-low" type="checkbox"> LOW</label>
+          </div>
+          <div id="type-filter" class="filter-row type-filter"></div>
+          <div id="graph-warning" class="inline-message"></div>
+          <div id="case-graph" role="img" aria-label="Graf relacji dla wybranej sprawy"></div>
+        </section>
+
+        <aside id="evidence-panel" class="panel evidence-panel">
+          <div class="section-head">
+            <div><div class="eyebrow">EVIDENCE</div><h3>Dowody</h3></div>
+            <select id="evidence-confidence" aria-label="Filtr dowodów">
+              <option value="HIGH,MEDIUM">HIGH + MEDIUM</option>
+              <option value="HIGH">HIGH</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="LOW">LOW</option>
+              <option value="ALL">ALL</option>
+            </select>
+          </div>
+          <div id="selected-element" class="selected-element muted">Kliknij węzeł lub relację grafu.</div>
+          <div id="evidence-list" class="evidence-list"></div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <script src="/ui/static/vendor/cytoscape.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="/ui/static/app.js"></script>
+</body>
+</html>

@@ -62,6 +62,9 @@ CASE="$ROOT/data/cases/${SAFE}-${STAMP}"
 BBOT_NAME="${SAFE}-${STAMP}"
 
 mkdir -p "$CASE"
+TOOL_STATUS="$CASE/.tool-status.tsv"
+: > "$TOOL_STATUS"
+record_tool() { printf '%s\t%s\n' "$1" "$2" >> "$TOOL_STATUS"; }
 
 echo
 echo "======================================"
@@ -73,18 +76,27 @@ echo "======================================"
 echo
 
 echo "[1/3] Subfinder..."
+set +e
 docker compose "${COMPOSE[@]}" run --rm subfinder \
   -d "$DOMAIN" -silent \
-  > "$CASE/subfinder.txt" || true
+  > "$CASE/subfinder.txt"
+CODE=$?
+set -e
+record_tool "subfinder" "$CODE"
 
 echo "[2/3] theHarvester..."
+set +e
 docker compose "${COMPOSE[@]}" run --rm theharvester \
   -d "$DOMAIN" \
   -b crtsh,certspotter \
   -l 200 \
-  > "$CASE/theharvester.txt" 2>&1 || true
+  > "$CASE/theharvester.txt" 2>&1
+CODE=$?
+set -e
+record_tool "theharvester" "$CODE"
 
 echo "[3/3] BBOT PASSIVE-LIGHT..."
+set +e
 docker compose "${COMPOSE[@]}" run --rm bbot \
   -t "$DOMAIN" \
   -m certspotter crt_db hackertarget rapiddns urlscan wayback \
@@ -92,7 +104,10 @@ docker compose "${COMPOSE[@]}" run --rm bbot \
   -c dns.minimal=true \
   -n "$BBOT_NAME" \
   -o /root/.bbot/scans \
-  > "$CASE/bbot.log" 2>&1 || true
+  > "$CASE/bbot.log" 2>&1
+CODE=$?
+set -e
+record_tool "bbot" "$CODE"
 
 BBOT_JSON="$ROOT/data/bbot/scans/$BBOT_NAME/output.json"
 
@@ -224,10 +239,14 @@ if [[ "$ACTIVE" -eq 1 ]]; then
   echo
   echo "[ACTIVE] httpx..."
 
+  set +e
   cat "$CASE/hosts.txt" \
     | docker compose "${COMPOSE[@]}" run --rm -T httpx \
         -silent -json \
-    > "$CASE/httpx.jsonl" || true
+    > "$CASE/httpx.jsonl"
+  CODE=$?
+  set -e
+  record_tool "httpx" "$CODE"
 
   echo "Wyniki ACTIVE: $CASE/httpx.jsonl"
 fi
@@ -241,5 +260,11 @@ echo "JSON: $CASE/hosts.json"
 echo "CASE: $CASE"
 
 echo
+echo "[NORMALIZE] CASE v2..."
+PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}" python3 "$ROOT/scripts/case-v2.py" "$CASE"
+
+echo "[FINALIZE] status narzędzi..."
+PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}" python3 "$ROOT/scripts/finalize-tools.py" "$CASE"
+
 echo "[AUTO-IMPORT] Neo4j..."
 "$ROOT/scripts/graph.sh" "$CASE"

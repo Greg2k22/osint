@@ -8,6 +8,7 @@ DONE="$ROOT/data/jobs/done"
 FAILED="$ROOT/data/jobs/failed"
 
 mkdir -p "$PENDING" "$RUNNING" "$DONE" "$FAILED"
+date -u +%Y-%m-%dT%H:%M:%SZ > "$ROOT/data/jobs/runner.heartbeat"
 
 JOB="$(find "$PENDING" -maxdepth 1 -type f -name '*.json' | sort | head -1 || true)"
 
@@ -115,9 +116,9 @@ json.dump(j,open(p,"w"),indent=2,ensure_ascii=False)
 
   echo "DONE: $ID"
   exit 0
+else
+  CODE=$?
 fi
-
-CODE=$?
 
 python3 -c '
 import json,sys

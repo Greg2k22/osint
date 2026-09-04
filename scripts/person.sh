@@ -21,6 +21,9 @@ SAFE="$(echo "$USERNAME" | tr -cd 'A-Za-z0-9._-')"
 CASE="$ROOT/data/cases/person-${SAFE}-${STAMP}"
 
 mkdir -p "$CASE"
+TOOL_STATUS="$CASE/.tool-status.tsv"
+: > "$TOOL_STATUS"
+record_tool() { printf '%s\t%s\n' "$1" "$2" >> "$TOOL_STATUS"; }
 
 USERNAME="$USERNAME" CASE="$CASE" python3 <<'META'
 import json
@@ -47,14 +50,22 @@ echo "======================================"
 echo
 
 echo "[1/2] Maigret..."
+set +e
 docker compose "${COMPOSE[@]}" \
   run --rm maigret "$USERNAME" \
-  > "$CASE/maigret.txt" 2>&1 || true
+  > "$CASE/maigret.txt" 2>&1
+CODE=$?
+set -e
+record_tool "maigret" "$CODE"
 
 echo "[2/2] Sherlock..."
+set +e
 docker compose "${COMPOSE[@]}" \
   run --rm sherlock "$USERNAME" --print-found --no-color \
-  > "$CASE/sherlock.txt" 2>&1 || true
+  > "$CASE/sherlock.txt" 2>&1
+CODE=$?
+set -e
+record_tool "sherlock" "$CODE"
 
 USERNAME="$USERNAME" CASE="$CASE" python3 <<'PY'
 import json
@@ -131,5 +142,11 @@ echo "JSON: $CASE/profiles.json"
 echo "CASE: $CASE"
 
 echo
+echo "[NORMALIZE] CASE v2..."
+PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}" python3 "$ROOT/scripts/case-v2.py" "$CASE"
+
+echo "[FINALIZE] status narzędzi..."
+PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}" python3 "$ROOT/scripts/finalize-tools.py" "$CASE"
+
 echo "[AUTO-IMPORT] Neo4j..."
 "$ROOT/scripts/graph.sh" "$CASE"
