@@ -59,3 +59,26 @@ def test_readme_covers_operations_and_responsible_use():
         "privacy", "responsible", "data/", "docker compose down -v",
     ]:
         assert term in readme
+
+
+def test_neo4j_backup_is_offline_and_restore_stops_api_first():
+    backup = text("scripts/backup.sh")
+    restore = text("scripts/restore.sh")
+
+    # Pomijamy tekst funkcji --help i sprawdzamy kolejność realnych poleceń.
+    backup_exec = backup.split('OUT_ROOT="$ROOT/backups"', 1)[1]
+    restore_exec = restore.split('SOURCE=""', 1)[1]
+
+    assert "docker compose stop neo4j" in backup_exec
+    assert "neo4j-admin database dump" in backup_exec
+    assert backup_exec.index("docker compose stop neo4j") < backup_exec.index(
+        "neo4j-admin database dump"
+    )
+
+    assert "docker compose stop api neo4j" in restore_exec
+    assert "dropdb" in restore_exec
+    assert restore_exec.index("docker compose stop api neo4j") < restore_exec.index(
+        "dropdb"
+    )
+
+    assert "--force" in restore_exec
