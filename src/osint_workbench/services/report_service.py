@@ -21,6 +21,9 @@ def build_report_from_case(case_dir: str | Path) -> dict:
     evidence = annotate_evidence(_read_json(case / 'evidence.json', []))
     findings = _read_json(case / 'findings.json', [])
     tool_runs = _read_json(case / 'tool_runs.json', [])
+    pivot_lineage = _read_json(case / 'pivot_lineage.json', [])
+    if not isinstance(pivot_lineage, list):
+        pivot_lineage = []
     grouped = {'HIGH': [], 'MEDIUM': [], 'LOW': [], 'SEED': []}
     for item in evidence:
         grouped.setdefault(str(item.get('confidence', 'LOW')).upper(), []).append(item)
@@ -53,6 +56,12 @@ def build_report_from_case(case_dir: str | Path) -> dict:
         'seed': grouped.get('SEED', []),
         'findings': findings,
         'tool_runs': tool_runs,
+        'pivot_lineage': pivot_lineage,
+        'pivot_summary': {
+            'enqueued_count': len(pivot_lineage),
+            'max_depth': max((int(x.get('depth', 0)) for x in pivot_lineage), default=0),
+            'pending_count': sum(1 for x in pivot_lineage if str(x.get('status','')).upper() == 'PENDING'),
+        },
         'limitations': [
             'Wyniki OSINT wskazują obserwacje i korelacje, a nie automatyczne potwierdzenie tożsamości lub własności zasobu.',
             'Brak wyniku w źródle nie oznacza nieistnienia badanego obiektu.',
@@ -86,6 +95,15 @@ def render_markdown(report: dict) -> str:
                 src = ', '.join(item.get('sources', []) or [])
                 lines.append(f"- {item.get('type','')}: {item.get('value','')} — źródła: {src}")
         lines.append('')
+    lines.extend(['## Ścieżka dochodzenia', ''])
+    lineage = report.get('pivot_lineage', [])
+    if not lineage:
+        lines.append('- Brak zarejestrowanych pivotów')
+    else:
+        for pivot in lineage:
+            lines.append(f"- depth={pivot.get('depth','')} · {pivot.get('scan_type','')} · {pivot.get('target','')} · score={pivot.get('score','')} · {pivot.get('reason','')}")
+    lines.append('')
+
     lines.extend(['## Narzędzia', ''])
     runs = report.get('tool_runs', [])
     if not runs:
