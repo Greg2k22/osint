@@ -21,6 +21,9 @@ SAFE="$(echo "$EMAIL" | tr '@.' '__' | tr -cd 'A-Za-z0-9_-')"
 CASE="$ROOT/data/cases/email-${SAFE}-${STAMP}"
 
 mkdir -p "$CASE"
+TOOL_STATUS="$CASE/.tool-status.tsv"
+: > "$TOOL_STATUS"
+record_tool() { printf '%s\t%s\n' "$1" "$2" >> "$TOOL_STATUS"; }
 
 EMAIL="$EMAIL" CASE="$CASE" python3 <<'META'
 import json
@@ -49,9 +52,13 @@ echo
 
 echo "[1/1] Holehe..."
 
+set +e
 docker compose "${COMPOSE[@]}" \
   run --rm holehe "$EMAIL" --only-used \
-  > "$CASE/holehe.txt" 2>&1 || true
+  > "$CASE/holehe.txt" 2>&1
+CODE=$?
+set -e
+record_tool "holehe" "$CODE"
 
 EMAIL="$EMAIL" CASE="$CASE" python3 <<'PY'
 import json
@@ -134,6 +141,9 @@ echo "CASE: $CASE"
 echo
 echo "[NORMALIZE] CASE v2..."
 PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}" python3 "$ROOT/scripts/case-v2.py" "$CASE"
+
+echo "[FINALIZE] status narzędzi..."
+PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}" python3 "$ROOT/scripts/finalize-tools.py" "$CASE"
 
 echo "[AUTO-IMPORT] Neo4j..."
 "$ROOT/scripts/graph.sh" "$CASE"

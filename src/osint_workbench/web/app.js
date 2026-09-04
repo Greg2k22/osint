@@ -42,6 +42,25 @@ async function loadHealth() {
   }
 }
 
+
+async function loadSystemStatus() {
+  const root = document.getElementById('system-status-grid');
+  if (!root) return;
+  try {
+    const data = await fetchJson('/api/system/status');
+    const core = ['api', 'postgres', 'redis', 'neo4j'];
+    const items = core.map(name => `<div class="system-item"><strong>${esc(name.toUpperCase())}</strong>${badge(data[name])}</div>`);
+    const runner = data.runner || {};
+    items.push(`<div class="system-item"><strong>RUNNER</strong>${badge(runner.status)}<span class="target">${runner.age_seconds == null ? '' : runner.age_seconds + ' s'}</span></div>`);
+    for (const [name, tool] of Object.entries(data.tools || {})) {
+      items.push(`<div class="system-item"><strong>${esc(name)}</strong>${badge(tool.status)}<span class="target">${esc(tool.version || tool.image || '')}</span></div>`);
+    }
+    root.innerHTML = items.join('');
+  } catch (err) {
+    root.innerHTML = `<span class="muted">Błąd statusu: ${esc(err.message)}</span>`;
+  }
+}
+
 async function loadCases() {
   const body = document.getElementById('case-body');
   try {
@@ -308,7 +327,7 @@ function fitGraph() { if (state.cy) state.cy.fit(undefined, 35); }
 function resetGraphLayout() { if (state.cy) state.cy.layout({name: 'cose', animate: false, fit: true, padding: 32}).run(); }
 
 async function refreshAll() {
-  await Promise.allSettled([loadHealth(), loadCases(), loadJobs()]);
+  await Promise.allSettled([loadHealth(), loadSystemStatus(), loadCases(), loadJobs()]);
 }
 
 function init() {

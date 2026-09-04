@@ -168,3 +168,5 @@ tbody tr:hover { background: rgba(96,165,250,.045); }
   .case-titlebar { align-items: flex-start; flex-direction: column; }
   #case-graph { height: 480px; }
 }
+
+.system-status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.system-item{display:flex;flex-direction:column;gap:7px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2)}.system-item strong{font-size:12px;letter-spacing:.05em}.system-item .badge{align-self:flex-start}

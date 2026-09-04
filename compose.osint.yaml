@@ -43,6 +43,9 @@ services:
     profiles: ["tools"]
 
   holehe:
+    build:
+      context: .
+      dockerfile: Dockerfile.holehe
     image: osint-holehe:arm64
     platform: linux/arm64/v8
     profiles: ["tools"]

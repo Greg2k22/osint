@@ -18,6 +18,7 @@ def build_report_from_case(case_dir: str | Path) -> dict:
     meta = _read_json(case / 'meta.json', {})
     evidence = _read_json(case / 'evidence.json', [])
     findings = _read_json(case / 'findings.json', [])
+    tool_runs = _read_json(case / 'tool_runs.json', [])
     grouped = {'HIGH': [], 'MEDIUM': [], 'LOW': [], 'SEED': []}
     for item in evidence:
         grouped.setdefault(str(item.get('confidence', 'LOW')).upper(), []).append(item)
@@ -35,6 +36,7 @@ def build_report_from_case(case_dir: str | Path) -> dict:
         'low': grouped.get('LOW', []),
         'seed': grouped.get('SEED', []),
         'findings': findings,
+        'tool_runs': tool_runs,
         'limitations': [
             'Wyniki OSINT wskazują obserwacje i korelacje, a nie automatyczne potwierdzenie tożsamości lub własności zasobu.',
             'Brak wyniku w źródle nie oznacza nieistnienia badanego obiektu.',
@@ -62,6 +64,14 @@ def render_markdown(report: dict) -> str:
                 src = ', '.join(item.get('sources', []) or [])
                 lines.append(f"- {item.get('type','')}: {item.get('value','')} — źródła: {src}")
         lines.append('')
+    lines.extend(['## Narzędzia', ''])
+    runs = report.get('tool_runs', [])
+    if not runs:
+        lines.append('- Brak danych o wykonaniu narzędzi')
+    else:
+        for run in runs:
+            lines.append(f"- {run.get('tool','')}: {run.get('status','')} (exit={run.get('exit_code','')})")
+    lines.append('')
     lines.extend(['## Ograniczenia', ''])
     for item in report.get('limitations', []):
         lines.append(f'- {item}')
