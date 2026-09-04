@@ -5,6 +5,8 @@ import io
 import json
 from pathlib import Path
 
+from osint_workbench.services.source_quality import annotate_evidence
+
 
 def _read_json(path: Path, default):
     try:
@@ -16,20 +18,34 @@ def _read_json(path: Path, default):
 def build_report_from_case(case_dir: str | Path) -> dict:
     case = Path(case_dir)
     meta = _read_json(case / 'meta.json', {})
-    evidence = _read_json(case / 'evidence.json', [])
+    evidence = annotate_evidence(_read_json(case / 'evidence.json', []))
     findings = _read_json(case / 'findings.json', [])
     tool_runs = _read_json(case / 'tool_runs.json', [])
     grouped = {'HIGH': [], 'MEDIUM': [], 'LOW': [], 'SEED': []}
     for item in evidence:
         grouped.setdefault(str(item.get('confidence', 'LOW')).upper(), []).append(item)
+    independent_families = sorted({family for item in evidence for family in item.get('source_families', [])})
+    high_count = len(grouped.get('HIGH', []))
+    medium_count = len(grouped.get('MEDIUM', []))
+    failed_tools = [run.get('tool','') for run in tool_runs if run.get('status') == 'ERROR']
+    executive_summary = [
+        f"Zebrano {len(evidence)} elementów evidence: {high_count} HIGH, {medium_count} MEDIUM.",
+        f"Niezależne rodziny źródeł: {len(independent_families)}.",
+    ]
+    if failed_tools:
+        executive_summary.append('Błędy narzędzi: ' + ', '.join(x for x in failed_tools if x) + '.')
+    else:
+        executive_summary.append('Brak zarejestrowanych błędów collectorów.')
     return {
         'case': meta,
+        'executive_summary': executive_summary,
         'summary': {
             'evidence_count': len(evidence),
             'finding_count': len(findings),
             'high_count': len(grouped.get('HIGH', [])),
             'medium_count': len(grouped.get('MEDIUM', [])),
             'low_count': len(grouped.get('LOW', [])),
+            'independent_source_families': len(independent_families),
         },
         'high': grouped.get('HIGH', []),
         'medium': grouped.get('MEDIUM', []),
@@ -54,6 +70,12 @@ def render_markdown(report: dict) -> str:
         f"- Tryb: {case.get('mode', '')}",
         f"- Status: {case.get('status', '')}", '',
     ]
+    lines.extend(['## Podsumowanie wykonawcze', ''])
+    for item in report.get('executive_summary', []):
+        lines.append(f'- {item}')
+    lines.append('')
+    lines.append(f"- Niezależne rodziny źródeł: {report.get('summary', {}).get('independent_source_families', 0)}")
+    lines.append('')
     for key, title in [('high','HIGH'),('medium','MEDIUM'),('low','LOW')]:
         lines.extend([f'## {title}', ''])
         items = report.get(key, [])
