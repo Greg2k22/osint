@@ -132,5 +132,8 @@ echo "JSON: $CASE/services.json"
 echo "CASE: $CASE"
 
 echo
+echo "[NORMALIZE] CASE v2..."
+PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}" python3 "$ROOT/scripts/case-v2.py" "$CASE"
+
 echo "[AUTO-IMPORT] Neo4j..."
 "$ROOT/scripts/graph.sh" "$CASE"
