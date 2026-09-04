@@ -137,13 +137,27 @@ async function submitScan(event) {
     result.textContent = 'ACTIVE wymaga potwierdzenia autoryzacji.';
     return;
   }
+
+  let activeToken = '';
+  if (active) {
+    activeToken = window.prompt('Podaj token autoryzacyjny ACTIVE:') || '';
+    if (!activeToken) {
+      result.className = 'inline-message error';
+      result.textContent = 'ACTIVE wymaga tokena autoryzacyjnego.';
+      return;
+    }
+  }
+
   button.disabled = true;
   result.className = 'inline-message';
   result.textContent = 'Dodawanie zadania…';
   try {
     const data = await fetchJson('/api/scan', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        ...(active ? {'X-OSINT-Active-Token': activeToken} : {}),
+      },
       body: JSON.stringify({type, target, active, authorized}),
     });
     result.className = 'inline-message ok';

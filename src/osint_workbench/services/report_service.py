@@ -79,6 +79,19 @@ def render_markdown(report: dict) -> str:
     return '\n'.join(lines)
 
 
+
+def _csv_safe(value) -> str:
+    """Neutralize spreadsheet formula injection while preserving display value."""
+    text = "" if value is None else str(value)
+
+    probe = text.lstrip(" \t\r\n")
+
+    if probe.startswith(("=", "+", "-", "@")):
+        return "'" + text
+
+    return text
+
+
 def render_csv(report: dict) -> str:
     output = io.StringIO(newline='')
     writer = csv.writer(output, lineterminator='\r\n')
@@ -87,7 +100,10 @@ def render_csv(report: dict) -> str:
     for level in ('high', 'medium', 'low', 'seed'):
         for item in report.get(level, []):
             writer.writerow([
-                item.get('type', ''), item.get('value', ''),
-                item.get('confidence', ''), ','.join(item.get('sources', []) or []), case_id,
+                _csv_safe(item.get('type', '')),
+                _csv_safe(item.get('value', '')),
+                _csv_safe(item.get('confidence', '')),
+                _csv_safe(','.join(item.get('sources', []) or [])),
+                _csv_safe(case_id),
             ])
     return output.getvalue()
