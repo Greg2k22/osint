@@ -125,6 +125,66 @@ async function loadRelatedCases() {
   }
 }
 
+
+async function loadPivots() {
+  const root = document.getElementById('pivot-list');
+  const msg = document.getElementById('pivot-message');
+  if (!root || !state.currentCaseId) return;
+  root.innerHTML = '<span class="muted">Ładowanie…</span>';
+  if (msg) { msg.className = 'inline-message'; msg.textContent = ''; }
+  try {
+    const data = await fetchJson(`/api/cases/${encodeURIComponent(state.currentCaseId)}/pivots?max_depth=3&limit=50`);
+    const pivots = Array.isArray(data.pivots) ? data.pivots : [];
+    if (!pivots.length) {
+      root.innerHTML = '<span class="muted">Brak kandydatów do dalszego pivotu.</span>';
+      return;
+    }
+    root.innerHTML = pivots.map(item => {
+      const blocked = item.executable ? '' : ` · ${esc(item.blocked_reason || 'manual')}`;
+      const action = item.executable
+        ? `<button class="secondary small" type="button" data-pivot-id="${esc(item.pivot_id)}">Dodaj PASSIVE</button>`
+        : '';
+      return `<article class="evidence-item ${item.score >= 70 ? 'high' : item.score >= 50 ? 'medium' : 'low'}">
+        <div><strong>${esc(item.scan_type || item.evidence_type)}</strong> · ${esc(item.target)} ${action}</div>
+        <div class="evidence-meta">score=${esc(item.score)} · depth=${esc(item.depth)} · ${esc(item.reason)}${blocked}</div>
+      </article>`;
+    }).join('');
+    root.querySelectorAll('[data-pivot-id]').forEach(button => button.addEventListener('click', () => enqueuePivot(button.dataset.pivotId)));
+  } catch (err) {
+    root.innerHTML = `<span class="muted">Błąd pivotów: ${esc(err.message)}</span>`;
+  }
+}
+
+async function enqueuePivot(pivotId) {
+  if (!state.currentCaseId) return;
+  const msg = document.getElementById('pivot-message');
+  try {
+    const data = await fetchJson(`/api/cases/${encodeURIComponent(state.currentCaseId)}/pivots/${encodeURIComponent(pivotId)}/enqueue`, {method: 'POST'});
+    if (msg) { msg.className = 'inline-message ok'; msg.textContent = `Dodano PASSIVE: ${data.scan_type} ${data.target}`; }
+    await Promise.allSettled([loadPivots(), loadJobs()]);
+  } catch (err) {
+    if (msg) { msg.className = 'inline-message error'; msg.textContent = `Błąd: ${err.message}`; }
+  }
+}
+
+async function autoEnqueuePivots() {
+  if (!state.currentCaseId) return;
+  const msg = document.getElementById('pivot-message');
+  try {
+    const data = await fetchJson(`/api/cases/${encodeURIComponent(state.currentCaseId)}/pivots/auto-enqueue`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({min_score: 60, max_count: 5, max_depth: 3}),
+    });
+    const count = Array.isArray(data.enqueued) ? data.enqueued.length : 0;
+    if (msg) { msg.className = 'inline-message ok'; msg.textContent = `Dodano ${count} zadań PASSIVE.`; }
+    await Promise.allSettled([loadPivots(), loadJobs()]);
+  } catch (err) {
+    if (msg) { msg.className = 'inline-message error'; msg.textContent = `Błąd: ${err.message}`; }
+  }
+}
+
+
 async function loadJobs() {
   const body = document.getElementById('job-body');
   try {
@@ -361,6 +421,7 @@ async function showCase(caseId) {
     document.getElementById('case-detail-meta').textContent = `${meta.type || 'CASE'} · ${meta.mode || ''} · ${meta.status || ''} · ${caseId}`;
     renderCaseSummary(state.report);
     await loadRelatedCases();
+    await loadPivots();
     renderEvidence();
     await loadCaseGraph();
     root.scrollIntoView({behavior: 'smooth', block: 'start'});
@@ -385,6 +446,7 @@ async function refreshAll() {
 
 function init() {
   document.getElementById('scan-form').addEventListener('submit', submitScan);
+  document.getElementById('pivot-auto-enqueue')?.addEventListener('click', autoEnqueuePivots);
 document.getElementById('case-search-button')?.addEventListener('click', searchCases);
 document.getElementById('case-search')?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); searchCases(); } });
   document.getElementById('scan-type').addEventListener('change', updateScanControls);
