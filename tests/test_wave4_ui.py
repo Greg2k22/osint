@@ -10,7 +10,7 @@ def test_ui_uses_external_assets_and_wave4_markers():
     text = response.text
     assert '/ui/static/app.css' in text
     assert '/ui/static/app.js' in text
-    assert 'cytoscape@3.33.1' in text
+    assert '/ui/static/vendor/cytoscape.min.js' in text
     assert 'id="case-graph"' in text
     assert 'id="evidence-panel"' in text
     assert 'id="confidence-high"' in text
