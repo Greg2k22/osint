@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OSINT Workbench v2</title>
+  <title>OSINT Workbench v2.2</title>
   <link rel="stylesheet" href="/ui/static/app.css">
 </head>
 <body>
   <header class="topbar">
     <div>
       <div class="eyebrow">LOCAL ANALYTICAL WORKBENCH</div>
-      <h1>OSINT Workbench <span class="version">v2</span></h1>
+      <h1>OSINT Workbench <span class="version">v2.2</span></h1>
       <p>Dowód → korelacja → confidence → graf → analiza</p>
     </div>
     <div class="topbar-actions">
@@ -74,7 +74,11 @@
       <section class="panel cases-panel">
         <div class="section-head">
           <div><div class="eyebrow">CASES</div><h2>Sprawy</h2></div>
+          <div style="display:flex;gap:8px;align-items:center">
+          <input id="case-search" type="search" placeholder="Szukaj targetu lub evidence" aria-label="Szukaj spraw">
+          <button id="case-search-button" class="secondary small" type="button">Szukaj</button>
           <span id="case-summary" class="hint">Ładowanie…</span>
+        </div>
         </div>
         <div class="table-wrap">
           <table id="case-table">
@@ -114,6 +118,11 @@
       </div>
 
       <section id="case-summary-cards" class="stats-grid case-stats"></section>
+
+      <section class="panel">
+        <div class="section-head"><div><div class="eyebrow">CORRELATE</div><h3>Powiązane sprawy</h3></div></div>
+        <div id="related-cases" class="evidence-list"><span class="muted">Ładowanie…</span></div>
+      </section>
 
       <div class="analysis-grid">
         <section class="panel graph-panel">

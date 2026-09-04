@@ -87,6 +87,44 @@ async function loadCases() {
   }
 }
 
+async function searchCases() {
+  const input = document.getElementById('case-search');
+  const q = (input?.value || '').trim();
+  if (!q) { await loadCases(); return; }
+  const body = document.getElementById('case-body');
+  try {
+    const data = await fetchJson(`/api/search?q=${encodeURIComponent(q)}&limit=50`);
+    const cases = Array.isArray(data.cases) ? data.cases : [];
+    document.getElementById('case-summary').textContent = `${cases.length} wyników`;
+    if (!cases.length) {
+      body.innerHTML = '<tr><td colspan="3" class="muted">Brak wyników.</td></tr>';
+      return;
+    }
+    body.innerHTML = cases.map(item => `
+      <tr><td>${badge(item.type)}</td><td><a class="case-link" href="#case-detail" data-case-id="${esc(item.case_id)}">${esc(item.target || item.case_id)}</a><span class="target">${esc(item.case_id)}</span></td><td>${esc(item.match_count ?? 0)}</td></tr>`).join('');
+    body.querySelectorAll('[data-case-id]').forEach(link => link.addEventListener('click', event => { event.preventDefault(); showCase(link.dataset.caseId); }));
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="3" class="muted">Błąd: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+async function loadRelatedCases() {
+  const root = document.getElementById('related-cases');
+  if (!root || !state.currentCaseId) return;
+  root.innerHTML = '<span class="muted">Ładowanie…</span>';
+  try {
+    const data = await fetchJson(`/api/cases/${encodeURIComponent(state.currentCaseId)}/related?limit=20`);
+    const items = Array.isArray(data.related) ? data.related : [];
+    if (!items.length) {
+      root.innerHTML = '<span class="muted">Brak wykrytych powiązań z innymi sprawami.</span>';
+      return;
+    }
+    root.innerHTML = items.map(item => `<article class="evidence-item medium"><div><strong>${esc(item.target || item.case_id)}</strong> ${badge(item.type)}</div><div class="evidence-meta">${esc(item.shared_count)} wspólnych elementów · ${esc(item.case_id)}</div></article>`).join('');
+  } catch (err) {
+    root.innerHTML = `<span class="muted">Błąd korelacji: ${esc(err.message)}</span>`;
+  }
+}
+
 async function loadJobs() {
   const body = document.getElementById('job-body');
   try {
@@ -322,6 +360,7 @@ async function showCase(caseId) {
     document.getElementById('case-detail-title').textContent = meta.target || meta.email || meta.username || caseId;
     document.getElementById('case-detail-meta').textContent = `${meta.type || 'CASE'} · ${meta.mode || ''} · ${meta.status || ''} · ${caseId}`;
     renderCaseSummary(state.report);
+    await loadRelatedCases();
     renderEvidence();
     await loadCaseGraph();
     root.scrollIntoView({behavior: 'smooth', block: 'start'});
@@ -346,6 +385,8 @@ async function refreshAll() {
 
 function init() {
   document.getElementById('scan-form').addEventListener('submit', submitScan);
+document.getElementById('case-search-button')?.addEventListener('click', searchCases);
+document.getElementById('case-search')?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); searchCases(); } });
   document.getElementById('scan-type').addEventListener('change', updateScanControls);
   document.getElementById('scan-mode').addEventListener('change', updateScanControls);
   document.getElementById('evidence-confidence').addEventListener('change', renderEvidence);
