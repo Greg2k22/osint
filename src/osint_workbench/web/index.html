@@ -1,668 +1,151 @@
-
 <!doctype html>
 <html lang="pl">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OSINT Workbench</title>
-  <style>
-    * { box-sizing: border-box; }
-
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      margin: 0;
-      background: #111827;
-      color: #e5e7eb;
-    }
-
-    header {
-      padding: 22px 32px;
-      border-bottom: 1px solid #374151;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    main {
-      padding: 32px;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    h1 { margin: 0; }
-
-    .status {
-      color: #86efac;
-      font-weight: 700;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 16px;
-      margin-bottom: 28px;
-    }
-
-    .card {
-      background: #1f2937;
-      border: 1px solid #374151;
-      border-radius: 12px;
-      padding: 18px;
-    }
-
-    .card h2 {
-      margin-top: 0;
-      font-size: 18px;
-    }
-
-    .toolbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin: 22px 0 12px;
-    }
-
-    button {
-      background: #2563eb;
-      border: 0;
-      color: white;
-      padding: 9px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-    }
-
-    button:hover {
-      background: #1d4ed8;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      background: #1f2937;
-      border: 1px solid #374151;
-      border-radius: 12px;
-      overflow: hidden;
-    }
-
-    th, td {
-      padding: 12px 14px;
-      text-align: left;
-      border-bottom: 1px solid #374151;
-      vertical-align: top;
-    }
-
-    th {
-      color: #93c5fd;
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: .04em;
-    }
-
-    td {
-      font-size: 14px;
-    }
-
-    tr:last-child td {
-      border-bottom: 0;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 999px;
-      background: #374151;
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    .muted {
-      color: #9ca3af;
-    }
-
-    .path {
-      max-width: 520px;
-      overflow-wrap: anywhere;
-      color: #9ca3af;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 12px;
-    }
-
-    #case-error {
-      display: none;
-      color: #fca5a5;
-      margin: 12px 0;
-    }
-  
-    .scan-form {
-      display: grid;
-      grid-template-columns: 180px 1fr 160px 220px;
-      gap: 12px;
-      align-items: end;
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    label {
-      font-size: 13px;
-      color: #9ca3af;
-    }
-
-    input, select {
-      width: 100%;
-      background: #111827;
-      color: #e5e7eb;
-      border: 1px solid #4b5563;
-      border-radius: 8px;
-      padding: 10px 12px;
-    }
-
-    .check {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-height: 40px;
-    }
-
-    .check input {
-      width: auto;
-    }
-
-    .scan-result {
-      margin-top: 12px;
-      min-height: 22px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 13px;
-    }
-
-    @media (max-width: 900px) {
-      .scan-form {
-        grid-template-columns: 1fr;
-      }
-    }
-
-  </style>
+  <title>OSINT Workbench v2</title>
+  <link rel="stylesheet" href="/ui/static/app.css">
 </head>
 <body>
-  <header>
+  <header class="topbar">
     <div>
-      <h1>OSINT Workbench</h1>
-      <div class="muted">DOMAIN / PERSON / EMAIL / GRAPH</div>
+      <div class="eyebrow">LOCAL ANALYTICAL WORKBENCH</div>
+      <h1>OSINT Workbench <span class="version">v2</span></h1>
+      <p>Dowód → korelacja → confidence → graf → analiza</p>
     </div>
-    <div class="status">Backend działa</div>
+    <div class="topbar-actions">
+      <span id="api-status" class="status-pill pending">API…</span>
+      <button class="secondary" type="button" onclick="refreshAll()">Odśwież</button>
+    </div>
   </header>
 
-  <main>
-    <div class="grid">
-      <section class="card">
-        <h2>DOMAIN</h2>
-        <p>BBOT, Subfinder, theHarvester, httpx.</p>
-      </section>
+  <main class="shell">
+    <section class="stats-grid" aria-label="Podsumowanie">
+      <article class="stat-card"><span>Sprawy</span><strong id="stat-cases">–</strong></article>
+      <article class="stat-card"><span>Zadania</span><strong id="stat-jobs">–</strong></article>
+      <article class="stat-card"><span>W kolejce</span><strong id="stat-pending">–</strong></article>
+      <article class="stat-card"><span>Błędy</span><strong id="stat-failed">–</strong></article>
+    </section>
 
-      <section class="card">
-        <h2>PERSON</h2>
-        <p>Maigret, Sherlock.</p>
-      </section>
+    <section class="panel">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">COLLECT</div>
+          <h2>Nowa analiza</h2>
+        </div>
+        <span class="hint">PASSIVE domyślnie · ACTIVE tylko DOMAIN</span>
+      </div>
 
-      <section class="card">
-        <h2>EMAIL</h2>
-        <p>Holehe.</p>
-      </section>
-
-      <section class="card">
-        <h2>GRAPH</h2>
-        <p>Neo4j, MEDIUM/HIGH.</p>
-      </section>
-    </div>
-
-    <section class="card" style="margin-bottom:28px">
-      <h2>Nowa analiza</h2>
-
-      <form id="scan-form" class="scan-form" onsubmit="submitScan(event)">
-        <div class="field">
-          <label for="scan-type">Typ</label>
-          <select id="scan-type" onchange="updateScanMode()">
+      <form id="scan-form" class="scan-form">
+        <label>Typ
+          <select id="scan-type">
             <option value="DOMAIN">DOMAIN</option>
             <option value="PERSON">PERSON</option>
             <option value="EMAIL">EMAIL</option>
           </select>
-        </div>
-
-        <div class="field">
-          <label for="scan-target">Cel</label>
-          <input
-            id="scan-target"
-            type="text"
-            autocomplete="off"
-            placeholder="example.org"
-            required>
-        </div>
-
-        <div class="field">
-          <label for="scan-mode">Tryb</label>
-          <select id="scan-mode" onchange="updateAuthorization()">
+        </label>
+        <label class="grow">Cel
+          <input id="scan-target" type="text" autocomplete="off" placeholder="example.org" required>
+        </label>
+        <label>Tryb
+          <select id="scan-mode">
             <option value="PASSIVE">PASSIVE</option>
             <option value="ACTIVE">ACTIVE</option>
           </select>
-        </div>
-
-        <div>
-          <label class="check">
-            <input id="scan-authorized" type="checkbox" disabled>
-            Mam autoryzację do ACTIVE
-          </label>
-          <button id="scan-submit" type="submit">Uruchom analizę</button>
-        </div>
+        </label>
+        <label class="authorization">
+          <input id="scan-authorized" type="checkbox" disabled>
+          Mam autoryzację
+        </label>
+        <button id="scan-submit" type="submit">Uruchom analizę</button>
       </form>
-
-      <div id="scan-result" class="scan-result muted"></div>
+      <div id="scan-result" class="inline-message"></div>
     </section>
 
-
-    <div class="toolbar">
-      <div>
-        <h2 style="margin:0">Sprawy</h2>
-        <div class="muted" id="case-summary">Ładowanie...</div>
-      </div>
-      <button onclick="refreshAll()">Odśwież</button>
-    </div>
-
-    <div id="case-error"></div>
-
-    <div id="case-detail" class="card" style="display:none; margin-bottom:24px">
-      <div class="toolbar" style="margin-top:0">
-        <div>
-          <h2 style="margin:0">Szczegóły sprawy</h2>
-          <div class="muted" id="case-detail-title"></div>
+    <div class="workspace-grid">
+      <section class="panel cases-panel">
+        <div class="section-head">
+          <div><div class="eyebrow">CASES</div><h2>Sprawy</h2></div>
+          <span id="case-summary" class="hint">Ładowanie…</span>
         </div>
-        <button onclick="closeCase()">Zamknij</button>
-      </div>
+        <div class="table-wrap">
+          <table id="case-table">
+            <thead><tr><th>Typ</th><th>Cel / Case ID</th><th>Obiekty</th></tr></thead>
+            <tbody id="case-body"><tr><td colspan="3" class="muted">Ładowanie…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
 
-      <div id="case-detail-content"></div>
+      <section class="panel jobs-panel">
+        <div class="section-head">
+          <div><div class="eyebrow">QUEUE</div><h2>Zadania</h2></div>
+          <span id="job-summary" class="hint">Ładowanie…</span>
+        </div>
+        <div class="table-wrap compact-table">
+          <table id="job-table">
+            <thead><tr><th>Status</th><th>Typ</th><th>Cel</th><th>Tryb</th></tr></thead>
+            <tbody id="job-body"><tr><td colspan="4" class="muted">Ładowanie…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
     </div>
 
-
-    <div class="toolbar" style="margin-top:32px">
-      <div>
-        <h2 style="margin:0">Zadania</h2>
-        <div class="muted" id="job-summary">Ładowanie...</div>
+    <section id="case-detail" class="case-detail hidden">
+      <div class="case-titlebar">
+        <div>
+          <div class="eyebrow">ANALYZE</div>
+          <h2 id="case-detail-title">Szczegóły sprawy</h2>
+          <div id="case-detail-meta" class="meta-line"></div>
+        </div>
+        <div class="export-actions">
+          <a id="export-md" class="button-link secondary" href="#" target="_blank">Markdown</a>
+          <a id="export-json" class="button-link secondary" href="#" target="_blank">JSON</a>
+          <a id="export-csv" class="button-link secondary" href="#" target="_blank">CSV</a>
+          <button class="secondary" type="button" onclick="closeCase()">Zamknij</button>
+        </div>
       </div>
-    </div>
 
-    <div id="job-error"></div>
+      <section id="case-summary-cards" class="stats-grid case-stats"></section>
 
-    <table id="job-table">
-      <thead>
-        <tr>
-          <th>Status</th>
-          <th>Typ</th>
-          <th>Cel</th>
-          <th>Job ID</th>
-          <th>Tryb</th>
-        </tr>
-      </thead>
-      <tbody id="job-body">
-        <tr>
-          <td colspan="5" class="muted">Ładowanie danych...</td>
-        </tr>
-      </tbody>
-    </table>
+      <div class="analysis-grid">
+        <section class="panel graph-panel">
+          <div class="section-head graph-head">
+            <div><div class="eyebrow">GRAPH</div><h3>Powiązania</h3></div>
+            <div class="graph-actions">
+              <button class="secondary small" type="button" onclick="fitGraph()">Dopasuj</button>
+              <button class="secondary small" type="button" onclick="resetGraphLayout()">Układ</button>
+            </div>
+          </div>
 
+          <div class="filter-row confidence-filter" aria-label="Filtr confidence">
+            <label><input id="confidence-high" type="checkbox" checked> HIGH</label>
+            <label><input id="confidence-medium" type="checkbox" checked> MEDIUM</label>
+            <label><input id="confidence-low" type="checkbox"> LOW</label>
+          </div>
+          <div id="type-filter" class="filter-row type-filter"></div>
+          <div id="graph-warning" class="inline-message"></div>
+          <div id="case-graph" role="img" aria-label="Graf relacji dla wybranej sprawy"></div>
+        </section>
 
-    <table id="case-table">
-      <thead>
-        <tr>
-          <th>Typ</th>
-          <th>Case ID</th>
-          <th>Obiekty</th>
-          <th>Ścieżka</th>
-        </tr>
-      </thead>
-      <tbody id="case-body">
-        <tr>
-          <td colspan="4" class="muted">Ładowanie danych...</td>
-        </tr>
-      </tbody>
-    </table>
+        <aside id="evidence-panel" class="panel evidence-panel">
+          <div class="section-head">
+            <div><div class="eyebrow">EVIDENCE</div><h3>Dowody</h3></div>
+            <select id="evidence-confidence" aria-label="Filtr dowodów">
+              <option value="HIGH,MEDIUM">HIGH + MEDIUM</option>
+              <option value="HIGH">HIGH</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="LOW">LOW</option>
+              <option value="ALL">ALL</option>
+            </select>
+          </div>
+          <div id="selected-element" class="selected-element muted">Kliknij węzeł lub relację grafu.</div>
+          <div id="evidence-list" class="evidence-list"></div>
+        </aside>
+      </div>
+    </section>
   </main>
 
-  <script>
-    function esc(value) {
-      return String(value ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-    }
-
-    async function loadCases() {
-      const body = document.getElementById("case-body");
-      const summary = document.getElementById("case-summary");
-      const error = document.getElementById("case-error");
-
-      error.style.display = "none";
-      body.innerHTML =
-        '<tr><td colspan="4" class="muted">Ładowanie danych...</td></tr>';
-
-      try {
-        const response = await fetch("/api/cases", {
-          headers: { "Accept": "application/json" }
-        });
-
-        if (!response.ok) {
-          throw new Error("HTTP " + response.status);
-        }
-
-        const data = await response.json();
-        const cases = Array.isArray(data.cases) ? data.cases : [];
-
-        summary.textContent = "Liczba spraw: " + cases.length;
-
-        if (cases.length === 0) {
-          body.innerHTML =
-            '<tr><td colspan="4" class="muted">Brak spraw.</td></tr>';
-          return;
-        }
-
-        body.innerHTML = cases.map(item => `
-          <tr>
-            <td><span class="badge">${esc(item.type || "UNKNOWN")}</span></td>
-            <td>
-              <a href="#"
-                 onclick="showCase('${esc(item.id)}'); return false;"
-                 style="color:#93c5fd">
-                ${esc(item.id)}
-              </a>
-            </td>
-            <td>${esc(item.observed)}</td>
-            <td class="path">${esc(item.path)}</td>
-          </tr>
-        `).join("");
-
-      } catch (err) {
-        summary.textContent = "Błąd ładowania";
-        error.textContent = "Nie udało się pobrać /api/cases: " + err.message;
-        error.style.display = "block";
-        body.innerHTML =
-          '<tr><td colspan="4" class="muted">Brak danych.</td></tr>';
-      }
-    }
-
-
-    function nodeValue(node) {
-      return node.name || node.value || node.url ||
-             node.address || JSON.stringify(node);
-    }
-
-    function closeCase() {
-      document.getElementById("case-detail").style.display = "none";
-    }
-
-    async function showCase(caseId) {
-      const box = document.getElementById("case-detail");
-      const title = document.getElementById("case-detail-title");
-      const content = document.getElementById("case-detail-content");
-
-      box.style.display = "block";
-      title.textContent = caseId;
-      content.innerHTML =
-        '<div class="muted">Ładowanie...</div>';
-
-      try {
-        const response = await fetch(
-          "/api/cases/" + encodeURIComponent(caseId)
-        );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.detail || ("HTTP " + response.status));
-        }
-
-        const observed = Array.isArray(data.observed)
-          ? data.observed : [];
-
-        const relations = Array.isArray(data.relations)
-          ? data.relations : [];
-
-        let html = `
-          <p>
-            <strong>Typ:</strong> ${esc(data.case.type)}
-            &nbsp;&nbsp;
-            <strong>Obiekty:</strong> ${observed.length}
-            &nbsp;&nbsp;
-            <strong>Relacje:</strong> ${relations.length}
-          </p>
-        `;
-
-        if (observed.length) {
-          html += `
-            <table>
-              <thead>
-                <tr>
-                  <th>Typ</th>
-                  <th>Wartość</th>
-                </tr>
-              </thead>
-              <tbody>
-          `;
-
-          html += observed.map(item => `
-            <tr>
-              <td>
-                <span class="badge">
-                  ${esc((item.labels || []).join(","))}
-                </span>
-              </td>
-              <td class="path">
-                ${esc(nodeValue(item.node || {}))}
-              </td>
-            </tr>
-          `).join("");
-
-          html += `
-              </tbody>
-            </table>
-          `;
-        }
-
-        if (relations.length) {
-          html += `
-            <h3 style="margin-top:24px">Relacje</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Od</th>
-                  <th>Relacja</th>
-                  <th>Do</th>
-                  <th>Confidence</th>
-                </tr>
-              </thead>
-              <tbody>
-          `;
-
-          html += relations.map(item => `
-            <tr>
-              <td class="path">
-                ${esc(nodeValue(item.from || {}))}
-              </td>
-              <td>${esc(item.type)}</td>
-              <td class="path">
-                ${esc(nodeValue(item.to || {}))}
-              </td>
-              <td>
-                ${esc((item.relation || {}).confidence || "")}
-              </td>
-            </tr>
-          `).join("");
-
-          html += `
-              </tbody>
-            </table>
-          `;
-        }
-
-        content.innerHTML = html;
-
-      } catch (err) {
-        content.innerHTML =
-          '<div style="color:#fca5a5">Błąd: ' +
-          esc(err.message) +
-          '</div>';
-      }
-    }
-
-    async function loadJobs() {
-      const body = document.getElementById("job-body");
-      const summary = document.getElementById("job-summary");
-      const error = document.getElementById("job-error");
-
-      error.style.display = "none";
-      body.innerHTML =
-        '<tr><td colspan="5" class="muted">Ładowanie danych...</td></tr>';
-
-      try {
-        const response = await fetch("/api/jobs", {
-          headers: { "Accept": "application/json" }
-        });
-
-        if (!response.ok) {
-          throw new Error("HTTP " + response.status);
-        }
-
-        const data = await response.json();
-        const jobs = Array.isArray(data.jobs) ? data.jobs : [];
-
-        summary.textContent = "Liczba zadań: " + jobs.length;
-
-        if (jobs.length === 0) {
-          body.innerHTML =
-            '<tr><td colspan="5" class="muted">Brak zadań.</td></tr>';
-          return;
-        }
-
-        body.innerHTML = jobs.map(item => `
-          <tr>
-            <td><span class="badge">${esc(item.status || item.queue || "UNKNOWN")}</span></td>
-            <td>${esc(item.type)}</td>
-            <td>${esc(item.target)}</td>
-            <td class="path">${esc(item.id)}</td>
-            <td>${item.active ? "ACTIVE" : "PASSIVE"}</td>
-          </tr>
-        `).join("");
-
-      } catch (err) {
-        summary.textContent = "Błąd ładowania";
-        error.textContent = "Nie udało się pobrać /api/jobs: " + err.message;
-        error.style.display = "block";
-        body.innerHTML =
-          '<tr><td colspan="5" class="muted">Brak danych.</td></tr>';
-      }
-    }
-
-    function updateScanMode() {
-      const type = document.getElementById("scan-type").value;
-      const mode = document.getElementById("scan-mode");
-
-      if (type !== "DOMAIN") {
-        mode.value = "PASSIVE";
-        mode.disabled = true;
-      } else {
-        mode.disabled = false;
-      }
-
-      updateAuthorization();
-    }
-
-    function updateAuthorization() {
-      const type = document.getElementById("scan-type").value;
-      const mode = document.getElementById("scan-mode").value;
-      const checkbox = document.getElementById("scan-authorized");
-
-      const active = type === "DOMAIN" && mode === "ACTIVE";
-
-      checkbox.disabled = !active;
-
-      if (!active) {
-        checkbox.checked = false;
-      }
-    }
-
-    async function submitScan(event) {
-      event.preventDefault();
-
-      const type = document.getElementById("scan-type").value;
-      const target = document.getElementById("scan-target").value.trim();
-      const mode = document.getElementById("scan-mode").value;
-      const authorized = document.getElementById("scan-authorized").checked;
-      const result = document.getElementById("scan-result");
-      const button = document.getElementById("scan-submit");
-
-      const active = type === "DOMAIN" && mode === "ACTIVE";
-
-      if (!target) {
-        result.textContent = "Podaj cel analizy.";
-        return;
-      }
-
-      if (active && !authorized) {
-        result.textContent = "ACTIVE wymaga potwierdzenia autoryzacji.";
-        return;
-      }
-
-      button.disabled = true;
-      result.textContent = "Dodawanie zadania...";
-
-      try {
-        const response = await fetch("/api/scan", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-          },
-          body: JSON.stringify({
-            type: type,
-            target: target,
-            active: active,
-            authorized: authorized
-          })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.detail || ("HTTP " + response.status));
-        }
-
-        result.textContent =
-          "PENDING | " + data.type + " | " + data.target +
-          " | Job: " + data.id;
-
-        document.getElementById("scan-target").value = "";
-
-        updateScanMode();
-    refreshAll();
-    setInterval(refreshAll, 5000);
-
-      } catch (err) {
-        result.textContent = "Błąd: " + err.message;
-      } finally {
-        button.disabled = false;
-      }
-    }
-
-
-    function refreshAll() {
-      loadCases();
-      loadJobs();
-    }
-
-    refreshAll();
-  </script>
+  <script src="https://unpkg.com/cytoscape@3.33.1/dist/cytoscape.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="/ui/static/app.js"></script>
 </body>
 </html>

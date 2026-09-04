@@ -1,9 +1,11 @@
 from pathlib import Path
+
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
 router = APIRouter()
-_UI = Path(__file__).resolve().parent.parent / "web" / "index.html"
+WEB_ROOT = Path(__file__).resolve().parent.parent / "web"
+_UI = WEB_ROOT / "index.html"
 
 
 @router.get("/ui", response_class=HTMLResponse)
